@@ -2,11 +2,21 @@
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
 import { AnalysisResult, Challenge } from '../types';
 
-if (!process.env.API_KEY) {
-  throw new Error("API_KEY environment variable not set");
-}
+let ai: GoogleGenAI | null = null;
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+export const initializeAi = (apiKey: string) => {
+  if (!apiKey) {
+    throw new Error("An API key is required to initialize the AI service.");
+  }
+  ai = new GoogleGenAI({ apiKey });
+};
+
+const getAi = (): GoogleGenAI => {
+  if (!ai) {
+    throw new Error("Gemini AI client has not been initialized. Please provide an API key.");
+  }
+  return ai;
+};
 
 async function urlToGenerativePart(url: string, mimeType: string) {
   const response = await fetch(url);
@@ -27,7 +37,8 @@ async function urlToGenerativePart(url: string, mimeType: string) {
 
 export const generateImage = async (prompt: string): Promise<string> => {
   try {
-    const response = await ai.models.generateImages({
+    const gemini = getAi();
+    const response = await gemini.models.generateImages({
       model: 'imagen-3.0-generate-002',
       prompt: prompt,
       config: {
@@ -63,6 +74,7 @@ export const analyzeImages = async (challenge: Challenge, generatedImageBase64: 
   `;
 
   try {
+    const gemini = getAi();
     const targetImagePart = await urlToGenerativePart(challenge.imageUrl, "image/jpeg");
     const generatedImagePart = {
       inlineData: {
@@ -71,7 +83,7 @@ export const analyzeImages = async (challenge: Challenge, generatedImageBase64: 
       },
     };
 
-    const response: GenerateContentResponse = await ai.models.generateContent({
+    const response: GenerateContentResponse = await gemini.models.generateContent({
       model: model,
       contents: {
           parts: [

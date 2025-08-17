@@ -4,9 +4,72 @@ import { Challenge, ChallengeStatus, AnalysisResult } from './types';
 import { CHALLENGES, PASS_THRESHOLD } from './constants';
 import ChallengeSelector from './components/ChallengeSelector';
 import ChallengeView from './components/ChallengeView';
-import { generateImage, analyzeImages } from './services/geminiService';
+import { generateImage, analyzeImages, initializeAi } from './services/geminiService';
+
+interface ApiKeyModalProps {
+  isOpen: boolean;
+  onSave: (apiKey: string) => void;
+}
+
+const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave }) => {
+  const [apiKey, setApiKey] = useState('');
+
+  if (!isOpen) {
+    return null;
+  }
+
+  const handleSave = () => {
+    if (apiKey.trim()) {
+      onSave(apiKey.trim());
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-dark bg-opacity-90 flex items-center justify-center z-50 animate-fade-in">
+      <div className="bg-gray-medium rounded-lg shadow-2xl p-8 w-full max-w-md space-y-6 transform animate-slide-in-up">
+        <h2 className="text-2xl font-bold text-white text-center">Enter Your Gemini API Key</h2>
+        
+        <div className="aspect-video bg-gray-dark rounded-md flex items-center justify-center">
+          <svg className="w-16 h-16 text-gray-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"></path>
+          </svg>
+        </div>
+
+        <p className="text-sm text-gray-light text-center">
+          To use this application, you need a Google Gemini API key. You can get one from Google AI Studio. The key will be stored in your browser's local storage.
+        </p>
+
+        <div>
+          <label htmlFor="apiKey" className="block text-sm font-medium text-gray-light mb-1">
+            Gemini API Key
+          </label>
+          <input
+            id="apiKey"
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="Enter your API key here"
+            className="w-full p-3 bg-gray-dark rounded-lg border-2 border-gray-medium focus:border-brand-primary focus:ring-brand-primary focus:outline-none transition-colors"
+            required
+          />
+        </div>
+
+        <button
+          onClick={handleSave}
+          disabled={!apiKey.trim()}
+          className="w-full py-3 px-6 bg-brand-primary hover:bg-brand-secondary text-white font-bold rounded-lg transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed transform hover:scale-105 active:scale-100"
+        >
+          Save and Continue
+        </button>
+      </div>
+    </div>
+  );
+};
+
 
 const App: React.FC = () => {
+  const [isInitialized, setIsInitialized] = useState<boolean>(false);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [challengeStatuses, setChallengeStatuses] = useState<ChallengeStatus[]>([]);
   const [currentChallengeIndex, setCurrentChallengeIndex] = useState<number>(0);
   const [prompt, setPrompt] = useState<string>('');
@@ -17,6 +80,19 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Check for API key and initialize
+    const savedKey = localStorage.getItem('gemini-api-key');
+    if (savedKey) {
+      initializeAi(savedKey);
+      setIsInitialized(true);
+    } else if (process.env.API_KEY) {
+      initializeAi(process.env.API_KEY);
+      setIsInitialized(true);
+    } else {
+      setIsModalOpen(true);
+    }
+
+    // Load challenge progress
     try {
       const savedProgress = localStorage.getItem('prompt-challenge-progress');
       if (savedProgress) {
@@ -100,43 +176,61 @@ const App: React.FC = () => {
     }
   };
   
+  const handleSaveApiKey = (key: string) => {
+    if (key) {
+      localStorage.setItem('gemini-api-key', key);
+      try {
+        initializeAi(key);
+        setIsModalOpen(false);
+        setIsInitialized(true);
+      } catch (err: any) {
+        setError(err.message);
+      }
+    }
+  };
+
   const currentChallenge = CHALLENGES[currentChallengeIndex];
 
   return (
-    <div className="min-h-screen bg-gray-dark font-sans text-gray-light">
-      <header className="py-4 px-8 bg-gray-medium/30 border-b border-gray-medium">
-        <h1 className="text-3xl font-bold text-white tracking-wider">
-          <span className="text-brand-primary">Prompt</span> Engineering Challenge
-        </h1>
-      </header>
-      <main className="flex flex-col md:flex-row p-4 md:p-8 gap-8">
-        <aside className="w-full md:w-1/4 lg:w-1/5">
-          <ChallengeSelector
-            challenges={CHALLENGES}
-            statuses={challengeStatuses}
-            currentChallengeId={currentChallenge.id}
-            onSelectChallenge={handleSelectChallenge}
-          />
-        </aside>
-        <div className="flex-1">
-          {currentChallenge && (
-            <ChallengeView
-              challenge={currentChallenge}
-              prompt={prompt}
-              onPromptChange={setPrompt}
-              onGenerate={handleGenerateAndAnalyze}
-              isLoading={isLoading}
-              loadingMessage={loadingMessage}
-              generatedImage={generatedImage}
-              analysisResult={analysisResult}
-              error={error}
-              onNextChallenge={handleNextChallenge}
-              isPassed={!!analysisResult && analysisResult.similarityScore >= PASS_THRESHOLD}
-            />
-          )}
+    <>
+      <ApiKeyModal isOpen={isModalOpen} onSave={handleSaveApiKey} />
+      {isInitialized && (
+        <div className="min-h-screen bg-gray-dark font-sans text-gray-light">
+          <header className="py-4 px-8 bg-gray-medium/30 border-b border-gray-medium">
+            <h1 className="text-3xl font-bold text-white tracking-wider">
+              <span className="text-brand-primary">Prompt</span> Engineering Challenge
+            </h1>
+          </header>
+          <main className="flex flex-col md:flex-row p-4 md:p-8 gap-8">
+            <aside className="w-full md:w-1/4 lg:w-1/5">
+              <ChallengeSelector
+                challenges={CHALLENGES}
+                statuses={challengeStatuses}
+                currentChallengeId={currentChallenge.id}
+                onSelectChallenge={handleSelectChallenge}
+              />
+            </aside>
+            <div className="flex-1">
+              {currentChallenge && (
+                <ChallengeView
+                  challenge={currentChallenge}
+                  prompt={prompt}
+                  onPromptChange={setPrompt}
+                  onGenerate={handleGenerateAndAnalyze}
+                  isLoading={isLoading}
+                  loadingMessage={loadingMessage}
+                  generatedImage={generatedImage}
+                  analysisResult={analysisResult}
+                  error={error}
+                  onNextChallenge={handleNextChallenge}
+                  isPassed={!!analysisResult && analysisResult.similarityScore >= PASS_THRESHOLD}
+                />
+              )}
+            </div>
+          </main>
         </div>
-      </main>
-    </div>
+      )}
+    </>
   );
 };
 
