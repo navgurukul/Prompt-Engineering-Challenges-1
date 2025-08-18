@@ -9,10 +9,19 @@ import { generateImage, analyzeImages, initializeAi } from './services/geminiSer
 interface ApiKeyModalProps {
   isOpen: boolean;
   onSave: (apiKey: string) => void;
+  onClose: () => void;
+  isClosable: boolean;
 }
 
-const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave }) => {
+const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave, onClose, isClosable }) => {
   const [apiKey, setApiKey] = useState('');
+
+  useEffect(() => {
+    // Reset local state when the modal is closed/opened
+    if (!isOpen) {
+      setApiKey('');
+    }
+  }, [isOpen]);
 
   if (!isOpen) {
     return null;
@@ -24,10 +33,24 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave }) => {
     }
   };
 
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isClosable && e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-gray-dark bg-opacity-90 flex items-center justify-center z-50 animate-fade-in">
-      <div className="bg-gray-medium rounded-lg shadow-2xl p-8 w-full max-w-md space-y-6 transform animate-slide-in-up">
-        <h2 className="text-2xl font-bold text-white text-center">Enter Your Gemini API Key</h2>
+    <div className="fixed inset-0 bg-gray-dark bg-opacity-90 flex items-center justify-center z-50 animate-fade-in" onClick={handleBackdropClick}>
+      <div className="bg-gray-medium rounded-lg shadow-2xl p-8 w-full max-w-md space-y-6 transform animate-slide-in-up relative">
+        {isClosable && (
+          <button onClick={onClose} className="absolute top-4 right-4 text-gray-light hover:text-white transition-colors" aria-label="Close modal">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+        
+        <h2 className="text-2xl font-bold text-white text-center">{isClosable ? 'Change API Key' : 'Enter Your Gemini API Key'}</h2>
         
         <div className="aspect-video bg-gray-dark rounded-md flex items-center justify-center">
           <svg className="w-16 h-16 text-gray-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -59,7 +82,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave }) => {
           disabled={!apiKey.trim()}
           className="w-full py-3 px-6 bg-brand-primary hover:bg-brand-secondary text-white font-bold rounded-lg transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed transform hover:scale-105 active:scale-100"
         >
-          Save and Continue
+          {isClosable ? 'Save Key' : 'Save and Continue'}
         </button>
       </div>
     </div>
@@ -184,6 +207,7 @@ const App: React.FC = () => {
         setIsModalOpen(false);
         setIsInitialized(true);
       } catch (err: any) {
+        // If initialization fails, keep the modal open but show an error.
         setError(err.message);
       }
     }
@@ -193,13 +217,25 @@ const App: React.FC = () => {
 
   return (
     <>
-      <ApiKeyModal isOpen={isModalOpen} onSave={handleSaveApiKey} />
+      <ApiKeyModal
+        isOpen={isModalOpen}
+        onSave={handleSaveApiKey}
+        onClose={() => setIsModalOpen(false)}
+        isClosable={isInitialized}
+      />
       {isInitialized && (
         <div className="min-h-screen bg-gray-dark font-sans text-gray-light">
-          <header className="py-4 px-8 bg-gray-medium/30 border-b border-gray-medium">
+          <header className="py-4 px-8 bg-gray-medium/30 border-b border-gray-medium flex justify-between items-center">
             <h1 className="text-3xl font-bold text-white tracking-wider">
               <span className="text-brand-primary">Prompt</span> Engineering Challenge
             </h1>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="py-2 px-4 bg-gray-medium hover:bg-gray-light/20 text-white text-sm font-semibold rounded-lg transition-colors"
+              aria-label="Change API Key"
+            >
+              Change API Key
+            </button>
           </header>
           <main className="flex flex-col md:flex-row p-4 md:p-8 gap-8">
             <aside className="w-full md:w-1/4 lg:w-1/5">
