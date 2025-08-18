@@ -27,7 +27,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave }) => {
   return (
     <div className="fixed inset-0 bg-gray-dark bg-opacity-90 flex items-center justify-center z-50 animate-fade-in">
       <div className="bg-gray-medium rounded-lg shadow-2xl p-8 w-full max-w-md space-y-6 transform animate-slide-in-up">
-        <h2 className="text-2xl font-bold text-white text-center">Enter Your Gemini API Key</h2>
+        <h2 className="text-2xl font-bold text-white text-center">Enter Your paid Gemini API Key</h2>
         
         <div className="aspect-video bg-gray-dark rounded-md flex items-center justify-center">
           <svg className="w-16 h-16 text-gray-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -36,7 +36,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave }) => {
         </div>
 
         <p className="text-sm text-gray-light text-center">
-          To use this application, you need a Google Gemini API key. You can get one from Google AI Studio. The key will be stored in your browser's local storage.
+          To use this application, you need a paid Google Gemini API key. You can get one from Google AI Studio. For image generation, you need an API Key from a paid project. The key will be stored in your browser's local storage.
         </p>
 
         <div>
@@ -48,7 +48,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave }) => {
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            placeholder="Enter your API key here"
+            placeholder="Enter your **paid** Gemini API key here"
             className="w-full p-3 bg-gray-dark rounded-lg border-2 border-gray-medium focus:border-brand-primary focus:ring-brand-primary focus:outline-none transition-colors"
             required
           />
