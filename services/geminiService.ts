@@ -55,7 +55,7 @@ export const generateImage = async (prompt: string): Promise<string> => {
     }
   } catch (error) {
     console.error("Error in generateImage:", error);
-    throw new Error("Failed to generate image. Please check your prompt or API key.");
+    throw new Error("Failed to generate image. Please check your prompt or make sure that your API Key is valid and paid.");
   }
 };
 
