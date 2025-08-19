@@ -158,9 +158,9 @@ const App: React.FC = () => {
       const imageB64 = await generateImage(prompt);
       setGeneratedImage(`data:image/jpeg;base64,${imageB64}`);
       
-      setLoadingMessage('Analyzing visual similarity...');
+      setLoadingMessage('Analyzing your creation...');
       const currentChallenge = CHALLENGES[currentChallengeIndex];
-      const result = await analyzeImages(currentChallenge, imageB64);
+      const result = await analyzeImages(currentChallenge, imageB64, prompt);
       setAnalysisResult(result);
 
       if (result.similarityScore >= PASS_THRESHOLD) {
@@ -260,6 +260,7 @@ const App: React.FC = () => {
                   error={error}
                   onNextChallenge={handleNextChallenge}
                   isPassed={!!analysisResult && analysisResult.similarityScore >= PASS_THRESHOLD}
+                  isNextChallengeAvailable={currentChallengeIndex < CHALLENGES.length - 1}
                 />
               )}
             </div>
