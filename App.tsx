@@ -7,7 +7,7 @@ import { Challenge, ChallengeStatus, AnalysisResult } from './types';
 import { CHALLENGES, PASS_THRESHOLD } from './constants';
 import ChallengeSelector from './components/ChallengeSelector';
 import ChallengeView from './components/ChallengeView';
-import { generateImage, analyzeImages, initializeAi } from './services/geminiService';
+import { generateImage, analyzeImages, initializeAi, ImageService } from './services/ApiService';
 
 interface ApiKeyModalProps {
   isOpen: boolean;
@@ -104,6 +104,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [selectedService, setSelectedService] = useState<ImageService>('pollinations');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [user, setUser] = useState<User | null>(getCurrentUser());
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -176,9 +177,9 @@ const App: React.FC = () => {
 
     try {
       setLoadingMessage('Generating your masterpiece...');
-      const imageB64 = await generateImage(prompt);
+      const imageB64 = await generateImage(prompt, selectedService);
       setGeneratedImage(`data:image/jpeg;base64,${imageB64}`);
-      
+
       setLoadingMessage('Analyzing visual similarity...');
       const currentChallenge = CHALLENGES[currentChallengeIndex];
       const result = await analyzeImages(currentChallenge, imageB64);
@@ -201,7 +202,7 @@ const App: React.FC = () => {
       setIsLoading(false);
       setLoadingMessage('');
     }
-  }, [prompt, currentChallengeIndex]);
+  }, [prompt, currentChallengeIndex, selectedService]);
 
   const handleSelectChallenge = (index: number) => {
     if (challengeStatuses[index] !== ChallengeStatus.LOCKED) {
@@ -238,6 +239,62 @@ const App: React.FC = () => {
 
   return (
     <>
+      <ApiKeyModal
+        isOpen={isModalOpen}
+        onSave={handleSaveApiKey}
+        onClose={() => setIsModalOpen(false)}
+        isClosable={isInitialized}
+      />
+      {isInitialized && (
+        <div className="min-h-screen bg-gray-dark font-sans text-gray-light">
+          <header className="py-4 px-8 bg-gray-medium/30 border-b border-gray-medium flex justify-between items-center">
+            <h1 className="text-3xl font-bold text-white tracking-wider">
+              <span className="text-brand-primary">Prompt</span> Engineering Challenge
+            </h1>
+            <div className="flex items-center gap-4">
+              <select
+                id="image-service"
+                value={selectedService}
+                onChange={e => setSelectedService(e.target.value as ImageService)}
+                className="py-2 px-4  rounded-lg bg-gray-medium hover:bg-gray-dark text-white text-sm font-semibold transition-colors border-0 focus:outline-none"
+              >
+                <option value="pollinations">Pollinations AI</option>
+                <option value="gemini">Gemini</option>
+              </select>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="py-2 px-4 bg-gray-medium hover:bg-gray-light/20 text-white text-sm font-semibold rounded-lg transition-colors"
+                aria-label="Change API Key"
+              >
+                Change API Key
+              </button>
+            </div>
+          </header>
+          <main className="flex flex-col md:flex-row p-4 md:p-8 gap-8">
+            <aside className="w-full md:w-1/4 lg:w-1/5">
+              <ChallengeSelector
+                challenges={CHALLENGES}
+                statuses={challengeStatuses}
+                currentChallengeId={currentChallenge.id}
+                onSelectChallenge={handleSelectChallenge}
+              />
+            </aside>
+            <div className="flex-1">
+              {currentChallenge && (
+                <ChallengeView
+                  challenge={currentChallenge}
+                  prompt={prompt}
+                  onPromptChange={setPrompt}
+                  onGenerate={handleGenerateAndAnalyze}
+                  isLoading={isLoading}
+                  loadingMessage={loadingMessage}
+                  generatedImage={generatedImage}
+                  analysisResult={analysisResult}
+                  error={error}
+                  onNextChallenge={handleNextChallenge}
+                  isPassed={!!analysisResult && analysisResult.similarityScore >= PASS_THRESHOLD}
+                />
+              )}
       {!user ? (
         <div className="min-h-screen bg-gray-dark font-sans text-gray-light flex flex-col items-center justify-center">
           <div className="bg-gray-medium rounded-lg shadow-2xl p-8 w-full max-w-md space-y-6">
