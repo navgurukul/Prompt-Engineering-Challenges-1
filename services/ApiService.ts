@@ -42,7 +42,7 @@ export const generateImage = async (prompt: string, service: ImageService = 'pol
   if (service === 'pollinations') {
     try {
       const encodedPrompt = encodeURIComponent(prompt);
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=kontext`;
+      const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux`;
       const response = await fetch(imageUrl);
       if (!response.ok) {
         throw new Error(`Failed to generate image: ${response.statusText}`);
@@ -77,7 +77,7 @@ export const generateImage = async (prompt: string, service: ImageService = 'pol
 };
 
 export const analyzeImages = async (challenge: Challenge, generatedImageBase64: string): Promise<AnalysisResult> => {
-  const model = 'gemini-2.0-flash';
+  const model = 'gemini-2.5-flash';
   
   const analysisPrompt = `
     You are an expert image analysis AI. A student is attempting a prompt engineering challenge.

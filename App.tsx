@@ -52,9 +52,9 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave, onClose, isCl
             </svg>
           </button>
         )}
-        
+
         <h2 className="text-2xl font-bold text-white text-center">{isClosable ? 'Change API Key' : 'Enter Your Gemini API Key'}</h2>
-        
+
         <div className="aspect-video bg-gray-dark rounded-md flex items-center justify-center">
           <svg className="w-16 h-16 text-gray-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"></path>
@@ -104,7 +104,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
-  const [selectedService, setSelectedService] = useState<ImageService>('pollinations');
+  const [selectedService, setSelectedService] = useState<ImageService>('gemini');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [user, setUser] = useState<User | null>(getCurrentUser());
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -160,11 +160,11 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if(challengeStatuses.length > 0) {
+    if (challengeStatuses.length > 0) {
       localStorage.setItem('prompt-challenge-progress', JSON.stringify(challengeStatuses));
     }
   }, [challengeStatuses]);
-  
+
   const handleGenerateAndAnalyze = useCallback(async () => {
     if (!prompt) {
       setError("Prompt cannot be empty.");
@@ -220,7 +220,7 @@ const App: React.FC = () => {
       handleSelectChallenge(nextIndex);
     }
   };
-  
+
   const handleSaveApiKey = (key: string) => {
     if (key) {
       localStorage.setItem('gemini-api-key', key);
@@ -239,62 +239,6 @@ const App: React.FC = () => {
 
   return (
     <>
-      <ApiKeyModal
-        isOpen={isModalOpen}
-        onSave={handleSaveApiKey}
-        onClose={() => setIsModalOpen(false)}
-        isClosable={isInitialized}
-      />
-      {isInitialized && (
-        <div className="min-h-screen bg-gray-dark font-sans text-gray-light">
-          <header className="py-4 px-8 bg-gray-medium/30 border-b border-gray-medium flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-white tracking-wider">
-              <span className="text-brand-primary">Prompt</span> Engineering Challenge
-            </h1>
-            <div className="flex items-center gap-4">
-              <select
-                id="image-service"
-                value={selectedService}
-                onChange={e => setSelectedService(e.target.value as ImageService)}
-                className="py-2 px-4  rounded-lg bg-gray-medium hover:bg-gray-dark text-white text-sm font-semibold transition-colors border-0 focus:outline-none"
-              >
-                <option value="pollinations">Pollinations AI</option>
-                <option value="gemini">Gemini</option>
-              </select>
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="py-2 px-4 bg-gray-medium hover:bg-gray-light/20 text-white text-sm font-semibold rounded-lg transition-colors"
-                aria-label="Change API Key"
-              >
-                Change API Key
-              </button>
-            </div>
-          </header>
-          <main className="flex flex-col md:flex-row p-4 md:p-8 gap-8">
-            <aside className="w-full md:w-1/4 lg:w-1/5">
-              <ChallengeSelector
-                challenges={CHALLENGES}
-                statuses={challengeStatuses}
-                currentChallengeId={currentChallenge.id}
-                onSelectChallenge={handleSelectChallenge}
-              />
-            </aside>
-            <div className="flex-1">
-              {currentChallenge && (
-                <ChallengeView
-                  challenge={currentChallenge}
-                  prompt={prompt}
-                  onPromptChange={setPrompt}
-                  onGenerate={handleGenerateAndAnalyze}
-                  isLoading={isLoading}
-                  loadingMessage={loadingMessage}
-                  generatedImage={generatedImage}
-                  analysisResult={analysisResult}
-                  error={error}
-                  onNextChallenge={handleNextChallenge}
-                  isPassed={!!analysisResult && analysisResult.similarityScore >= PASS_THRESHOLD}
-                />
-              )}
       {!user ? (
         <div className="min-h-screen bg-gray-dark font-sans text-gray-light flex flex-col items-center justify-center">
           <div className="bg-gray-medium rounded-lg shadow-2xl p-8 w-full max-w-md space-y-6">
@@ -326,72 +270,83 @@ const App: React.FC = () => {
             onClose={() => setIsModalOpen(false)}
             isClosable={isInitialized}
           />
-          <div className="min-h-screen bg-gray-dark font-sans text-gray-light">
-            <header className="py-4 px-8 bg-gray-medium/30 border-b border-gray-medium flex justify-between items-center">
-              <h1 className="text-3xl font-bold text-white tracking-wider">
-                <span className="text-brand-primary">Prompt</span> Engineering Challenge
-              </h1>
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setIsModalOpen(true)}
-                  className="py-2 px-4 bg-gray-medium hover:bg-gray-light/20 text-white text-sm font-semibold rounded-lg transition-colors"
-                  aria-label="Change API Key"
-                >
-                  Change API Key
-                </button>
-                <div className="relative inline-block text-left">
-                  <button
-                    className="flex items-center gap-2 py-2 px-4 bg-gray-medium hover:bg-gray-light/20 text-white text-sm font-semibold rounded-lg transition-colors focus:outline-none"
-                    onClick={() => setShowProfileDropdown((prev) => !prev)}
+          {isInitialized && (
+            <div className="min-h-screen bg-gray-dark font-sans text-gray-light">
+              <header className="py-4 px-8 bg-gray-medium/30 border-b border-gray-medium flex justify-between items-center">
+                <h1 className="text-3xl font-bold text-white tracking-wider">
+                  <span className="text-brand-primary">Prompt</span> Engineering Challenge
+                </h1>
+                <div className="flex items-center gap-4">
+                  <select
+                    id="image-service"
+                    value={selectedService}
+                    onChange={e => setSelectedService(e.target.value as ImageService)}
+                    className="py-2 px-4  rounded-lg bg-gray-medium hover:bg-gray-dark text-white text-sm font-semibold transition-colors border-0 focus:outline-none"
                   >
-                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-brand-primary text-white font-bold text-lg">
-                      {user.email ? user.email[0].toUpperCase() : user.username[0].toUpperCase()}
-                    </span>
-                    <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+                    <option value="pollinations">Pollinations AI</option>
+                    <option value="gemini">Gemini Imagen</option>
+                  </select>
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="py-2 px-4 bg-gray-medium hover:bg-gray-light/20 text-white text-sm font-semibold rounded-lg transition-colors"
+                    aria-label="Change API Key"
+                  >
+                    Change API Key
                   </button>
-                  {showProfileDropdown && (
-                    <div className="absolute right-0 mt-4 w-40 bg-gray-medium rounded-lg shadow-lg z-50" style={{ minWidth: '10rem' }}>
-                      <button
-                        className="w-full text-left px-4 py-2 text-sm text-white hover:bg-red-600 rounded-b-lg"
-                        onClick={() => { setShowProfileDropdown(false); handleLogout(); }}
-                      >
-                        🚪 Logout
-                      </button>
-                    </div>
+                  <div className="relative inline-block text-left">
+                    <button
+                      className="flex items-center gap-2 py-2 px-4 bg-gray-medium hover:bg-gray-light/20 text-white text-sm font-semibold rounded-lg transition-colors focus:outline-none"
+                      onClick={() => setShowProfileDropdown((prev) => !prev)}
+                    >
+                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-brand-primary text-white font-bold text-lg">
+                        {user.email ? user.email[0].toUpperCase() : user.username[0].toUpperCase()}
+                      </span>
+                      <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {showProfileDropdown && (
+                      <div className="absolute right-0 mt-4 w-40 bg-gray-medium rounded-lg shadow-lg z-50" style={{ minWidth: '10rem' }}>
+                        <button
+                          className="w-full text-left px-4 py-2 text-sm text-white hover:bg-red-600 rounded-b-lg"
+                          onClick={() => { setShowProfileDropdown(false); handleLogout(); }}
+                        >
+                          🚪 Logout
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </header>
+              <main className="flex flex-col md:flex-row p-4 md:p-8 gap-8">
+                <aside className="w-full md:w-1/4 lg:w-1/5">
+                  <ChallengeSelector
+                    challenges={CHALLENGES}
+                    statuses={challengeStatuses}
+                    currentChallengeId={currentChallenge.id}
+                    onSelectChallenge={handleSelectChallenge}
+                  />
+                </aside>
+                <div className="flex-1">
+                  {currentChallenge && (
+                    <ChallengeView
+                      challenge={currentChallenge}
+                      prompt={prompt}
+                      onPromptChange={setPrompt}
+                      onGenerate={handleGenerateAndAnalyze}
+                      isLoading={isLoading}
+                      loadingMessage={loadingMessage}
+                      generatedImage={generatedImage}
+                      analysisResult={analysisResult}
+                      error={error}
+                      onNextChallenge={handleNextChallenge}
+                      isPassed={!!analysisResult && analysisResult.similarityScore >= PASS_THRESHOLD}
+                    />
                   )}
                 </div>
-              </div>
-            </header>
-            <main className="flex flex-col md:flex-row p-4 md:p-8 gap-8">
-              <aside className="w-full md:w-1/4 lg:w-1/5">
-                <ChallengeSelector
-                  challenges={CHALLENGES}
-                  statuses={challengeStatuses}
-                  currentChallengeId={currentChallenge.id}
-                  onSelectChallenge={handleSelectChallenge}
-                />
-              </aside>
-              <div className="flex-1">
-                {currentChallenge && (
-                  <ChallengeView
-                    challenge={currentChallenge}
-                    prompt={prompt}
-                    onPromptChange={setPrompt}
-                    onGenerate={handleGenerateAndAnalyze}
-                    isLoading={isLoading}
-                    loadingMessage={loadingMessage}
-                    generatedImage={generatedImage}
-                    analysisResult={analysisResult}
-                    error={error}
-                    onNextChallenge={handleNextChallenge}
-                    isPassed={!!analysisResult && analysisResult.similarityScore >= PASS_THRESHOLD}
-                  />
-                )}
-              </div>
-            </main>
-          </div>
+              </main>
+            </div>
+          )}
         </>
       )}
     </>

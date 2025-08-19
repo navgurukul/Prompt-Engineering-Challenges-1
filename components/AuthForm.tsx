@@ -33,12 +33,12 @@ const AuthForm: React.FC<AuthFormProps> = ({ onSubmit, type }) => {
       </h2>
       <div>
         <label htmlFor="username" className="block text-sm font-medium text-gray-light mb-1">
-          👤 Username
+          👤 Email
         </label>
         <input
           id="username"
-          type="text"
-          placeholder="Enter your username"
+          type="email"
+          placeholder="Enter your email"
           value={username}
           onChange={e => setUsername(e.target.value)}
           required
