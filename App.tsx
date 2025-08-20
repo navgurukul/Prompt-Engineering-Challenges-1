@@ -144,13 +144,13 @@ const App: React.FC = () => {
     }
   }, []);
   // Auth handlers
-  const handleLogin = async (username: string, password: string) => {
-    const loggedInUser = await login(username, password);
+  const handleLogin = async (email: string, password: string) => {
+    const loggedInUser = await login(email, password);
     setUser(loggedInUser);
   };
 
-  const handleSignup = async (username: string, password: string) => {
-    const signedUpUser = await signup(username, password);
+  const handleSignup = async (email: string, password: string) => {
+    const signedUpUser = await signup(email, password);
     setUser(signedUpUser);
   };
 
@@ -299,7 +299,7 @@ const App: React.FC = () => {
                       onClick={() => setShowProfileDropdown((prev) => !prev)}
                     >
                       <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-brand-primary text-white font-bold text-lg">
-                        {user.email ? user.email[0].toUpperCase() : user.username[0].toUpperCase()}
+                        {user.email[0].toUpperCase()}
                       </span>
                       <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -341,6 +341,7 @@ const App: React.FC = () => {
                       error={error}
                       onNextChallenge={handleNextChallenge}
                       isPassed={!!analysisResult && analysisResult.similarityScore >= PASS_THRESHOLD}
+                      isNextChallengeAvailable={currentChallengeIndex + 1 < CHALLENGES.length}
                     />
                   )}
                 </div>

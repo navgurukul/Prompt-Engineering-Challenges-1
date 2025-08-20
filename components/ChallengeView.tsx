@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { Challenge, AnalysisResult } from '../types';
 import Spinner from './Spinner';
-import { getLocalImageAsBlobUrl } from '../services/geminiService';
+import { getLocalImageAsBlobUrl } from '../services/ApiService';
 
 interface ChallengeViewProps {
   challenge: Challenge;
@@ -16,21 +15,8 @@ interface ChallengeViewProps {
   error: string | null;
   onNextChallenge: () => void;
   isPassed: boolean;
+  isNextChallengeAvailable: boolean;
 }
-
-const ScoreBar: React.FC<{ score: number }> = ({ score }) => {
-    const width = `${score}%`;
-    const colorClass = score >= 80 ? 'bg-green-500' : score >= 50 ? 'bg-yellow-500' : 'bg-red-500';
-
-    return (
-        <div className="w-full bg-gray-medium rounded-full h-4 my-2">
-            <div
-                className={`h-4 rounded-full transition-all duration-500 ease-out ${colorClass}`}
-                style={{ width }}
-            ></div>
-        </div>
-    );
-};
 
 const ChallengeView: React.FC<ChallengeViewProps> = ({
   challenge,
@@ -43,7 +29,8 @@ const ChallengeView: React.FC<ChallengeViewProps> = ({
   analysisResult,
   error,
   onNextChallenge,
-  isPassed
+  isPassed,
+  isNextChallengeAvailable
 }) => {
   const [targetImageSrc, setTargetImageSrc] = useState<string | null>(null);
 
@@ -123,25 +110,30 @@ const ChallengeView: React.FC<ChallengeViewProps> = ({
       </div>
 
       {analysisResult && (
-        <div className="bg-gray-medium/50 p-6 rounded-lg border border-gray-medium animate-slide-in-up">
-          <h3 className="text-2xl font-semibold mb-2">Analysis Result</h3>
-          <div className="flex items-center space-x-4 mb-2">
-            <p className="font-bold text-3xl">{analysisResult.similarityScore}<span className="text-xl text-gray-light">/100</span></p>
-            <div className="flex-1">
-                <ScoreBar score={analysisResult.similarityScore} />
-            </div>
+        <div className="bg-gray-medium/50 p-6 rounded-lg border border-gray-medium animate-slide-in-up space-y-6">
+          <h3 className="text-2xl font-bold text-white">Analysis Result</h3>
+          
+          <div>
+            <h4 className="text-lg font-semibold text-brand-light">Feedback</h4>
+            <ol className="list-decimal list-inside text-gray-light space-y-2 mt-2">
+              {analysisResult.feedback.map((item, index) => (
+                <li key={index}>{item}</li>
+              ))}
+            </ol>
           </div>
-          <p className="text-gray-light leading-relaxed">{analysisResult.feedback}</p>
+
           {isPassed && (
-            <div className="mt-4 text-center">
+            <div className="pt-4 text-center border-t border-gray-medium/50">
               <p className="text-green-400 font-bold text-lg">Congratulations! You passed this challenge!</p>
-              {challenge.id < 6 && (
+              {isNextChallengeAvailable ? (
                 <button
                   onClick={onNextChallenge}
                   className="mt-2 py-2 px-6 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-transform transform hover:scale-105"
                 >
                   Next Challenge &rarr;
                 </button>
+              ) : (
+                 <p className="mt-2 text-yellow-300 font-semibold">You've completed all the challenges!</p>
               )}
             </div>
           )}

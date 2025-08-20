@@ -1,4 +1,3 @@
-
 export enum ChallengeStatus {
   LOCKED = 'LOCKED',
   UNLOCKED = 'UNLOCKED',
@@ -14,6 +13,5 @@ export interface Challenge {
 
 export interface AnalysisResult {
   similarityScore: number;
-  feedback: string;
+  feedback: string[];
 }
-   
