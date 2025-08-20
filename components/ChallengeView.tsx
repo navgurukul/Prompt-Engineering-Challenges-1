@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { Challenge, AnalysisResult } from '../types';
 import Spinner from './Spinner';
-import { getLocalImageAsBlobUrl } from '../services/geminiService';
+import { getLocalImageAsBlobUrl } from '../services/ApiService';
 
 interface ChallengeViewProps {
   challenge: Challenge;
@@ -18,28 +17,6 @@ interface ChallengeViewProps {
   isPassed: boolean;
   isNextChallengeAvailable: boolean;
 }
-
-const ScoreBar: React.FC<{ score: number, colorScheme?: 'primary' | 'secondary' }> = ({ score, colorScheme = 'primary' }) => {
-    const width = score > 100 ? '100%' : `${score}%`; // Clamp score for width calculation
-    let colorClass = '';
-
-    if (colorScheme === 'primary') {
-      // Green/Yellow/Red for the main passing score (Visual Similarity)
-      colorClass = score >= 80 ? 'bg-green-500' : score >= 50 ? 'bg-yellow-500' : 'bg-red-500';
-    } else {
-      // Brand colors for the diagnostic score (Prompt Adherence)
-      colorClass = score >= 80 ? 'bg-brand-primary' : score >= 50 ? 'bg-brand-secondary' : 'bg-indigo-800';
-    }
-
-    return (
-        <div className="w-full bg-gray-medium rounded-full h-4 my-2">
-            <div
-                className={`h-4 rounded-full transition-all duration-500 ease-out ${colorClass}`}
-                style={{ width }}
-            ></div>
-        </div>
-    );
-};
 
 const ChallengeView: React.FC<ChallengeViewProps> = ({
   challenge,
@@ -135,54 +112,14 @@ const ChallengeView: React.FC<ChallengeViewProps> = ({
       {analysisResult && (
         <div className="bg-gray-medium/50 p-6 rounded-lg border border-gray-medium animate-slide-in-up space-y-6">
           <h3 className="text-2xl font-bold text-white">Analysis Result</h3>
-
-          {/* Similarity Score */}
-          <div>
-            <div className="flex justify-between items-baseline">
-              <h4 className="text-lg font-semibold text-brand-light">Visual Similarity Score</h4>
-              <p className="font-bold text-2xl text-white">{analysisResult.similarityScore}<span className="text-lg text-gray-light">/100</span></p>
-            </div>
-            <ScoreBar score={analysisResult.similarityScore} colorScheme="primary" />
-            <p className="text-sm text-gray-light italic">{analysisResult.similarityScoreRemarks}</p>
-            
-            {/* Breakdown Section */}
-            <div className="mt-4 pt-3 border-t border-gray-medium/50">
-              <h5 className="text-sm font-semibold text-gray-light mb-2">Score Breakdown:</h5>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-gray-light">
-                <div className="flex justify-between">
-                  <span>Subject Match:</span>
-                  <span className="font-semibold text-white">{analysisResult.subjectScore}/25</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Composition Match:</span>
-                  <span className="font-semibold text-white">{analysisResult.compositionScore}/25</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Color & Lighting Match:</span>
-                  <span className="font-semibold text-white">{analysisResult.colorScore}/25</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Style Match:</span>
-                  <span className="font-semibold text-white">{analysisResult.styleScore}/25</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Prompt Score */}
-          <div>
-            <div className="flex justify-between items-baseline">
-              <h4 className="text-lg font-semibold text-brand-light">Prompt Adherence Score</h4>
-              <p className="font-bold text-2xl text-white">{analysisResult.promptScore}<span className="text-lg text-gray-light">/100</span></p>
-            </div>
-            <ScoreBar score={analysisResult.promptScore} colorScheme="secondary" />
-            <p className="text-sm text-gray-light italic">{analysisResult.promptScoreRemarks}</p>
-          </div>
           
-          {/* Overall Feedback */}
           <div>
-            <h4 className="text-lg font-semibold text-brand-light">Overall Feedback</h4>
-            <p className="text-gray-light leading-relaxed">{analysisResult.feedback}</p>
+            <h4 className="text-lg font-semibold text-brand-light">Feedback</h4>
+            <ol className="list-decimal list-inside text-gray-light space-y-2 mt-2">
+              {analysisResult.feedback.map((item, index) => (
+                <li key={index}>{item}</li>
+              ))}
+            </ol>
           </div>
 
           {isPassed && (

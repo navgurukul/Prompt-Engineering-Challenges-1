@@ -1,12 +1,13 @@
+
 import React, { useState } from 'react';
 
 interface AuthFormProps {
-  onSubmit: (username: string, password: string) => Promise<void>;
+  onSubmit: (email: string, password: string) => Promise<void>;
   type: 'login' | 'signup';
 }
 
 const AuthForm: React.FC<AuthFormProps> = ({ onSubmit, type }) => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -16,7 +17,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onSubmit, type }) => {
     setLoading(true);
     setError('');
     try {
-      await onSubmit(username, password);
+      await onSubmit(email, password);
     } catch (err) {
       setError('Authentication failed');
     }
@@ -32,15 +33,15 @@ const AuthForm: React.FC<AuthFormProps> = ({ onSubmit, type }) => {
         {type === 'login' ? '🔑 Login to Your Account' : '📝 Create a New Account'}
       </h2>
       <div>
-        <label htmlFor="username" className="block text-sm font-medium text-gray-light mb-1">
+        <label htmlFor="email" className="block text-sm font-medium text-gray-light mb-1">
           👤 Email
         </label>
         <input
-          id="username"
+          id="email"
           type="email"
           placeholder="Enter your email"
-          value={username}
-          onChange={e => setUsername(e.target.value)}
+          value={email}
+          onChange={e => setEmail(e.target.value)}
           required
           className="w-full p-3 bg-gray-medium rounded-lg border-2 border-gray-dark focus:border-brand-primary focus:ring-brand-primary focus:outline-none transition-colors mb-2 text-white"
         />

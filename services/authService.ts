@@ -1,6 +1,6 @@
 
 export type User = {
-  username: string;
+  email: string;
 };
 
 let currentUser: User | null = null;
@@ -26,29 +26,29 @@ function setCurrentUser(user: User | null) {
   }
 }
 
-export const login = async (username: string, password: string): Promise<User> => {
+export const login = async (email: string, password: string): Promise<User> => {
   await new Promise((r) => setTimeout(r, 500));
   const users = getUsers();
-  if (!users[username]) {
+  if (!users[email]) {
     throw new Error('User not found. Please sign up first.');
   }
-  if (users[username] !== password) {
+  if (users[email] !== password) {
     throw new Error('Incorrect password.');
   }
-  const user = { username };
+  const user = { email };
   setCurrentUser(user);
   return user;
 };
 
-export const signup = async (username: string, password: string): Promise<User> => {
+export const signup = async (email: string, password: string): Promise<User> => {
   await new Promise((r) => setTimeout(r, 500));
   const users = getUsers();
-  if (users[username]) {
-    throw new Error('Username already exists.');
+  if (users[email]) {
+    throw new Error('Email already exists.');
   }
-  users[username] = password;
+  users[email] = password;
   setUsers(users);
-  const user = { username };
+  const user = { email };
   setCurrentUser(user);
   return user;
 };
