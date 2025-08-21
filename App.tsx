@@ -7,6 +7,7 @@ import { CHALLENGES, PASS_THRESHOLD } from './constants';
 import ChallengeSelector from './components/ChallengeSelector';
 import ChallengeView from './components/ChallengeView';
 import { generateImage, analyzeImages, initializeAi, ImageService } from './services/ApiService';
+import { audioSources } from './services/audioService';
 
 interface ApiKeyModalProps {
   isOpen: boolean;
@@ -90,13 +91,14 @@ const App: React.FC = () => {
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [isHidingAuth, setIsHidingAuth] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const streakUpAudioRef = useRef<HTMLAudioElement>(null);
   const streakDownAudioRef = useRef<HTMLAudioElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [streakChange, setStreakChange] = useState<'increase' | 'decrease' | 'none'>('none');
-  const [promptCache, setPromptCache] = useState<Record<string, { imageB64: string; analysisResult: AnalysisResult }>>({});
 
-  const PROGRESS_STORAGE_KEY = 'prompt-challenge-progress-v2';
+  const PROGRESS_STORAGE_KEY = 'prompt-challenge-progress';
 
   useEffect(() => {
     const savedKey = localStorage.getItem('gemini-api-key');
@@ -214,277 +216,323 @@ const App: React.FC = () => {
     }
   }, [challengeProgress]);
 
-  const handleGenerateAndAnalyze = useCallback(async () => {
-    if (!prompt) {
-      setError("Prompt cannot be empty.");
+  const handleSaveProgress = () => {
+    try {
+      setShowProfileDropdown(false);
+      // Use the live state as the source of truth, not localStorage.
+      if (!challengeProgress || Object.keys(challengeProgress).length === 0) {
+        alert("No progress data to save.");
+        return;
+      }
+      const progressData = JSON.stringify(challengeProgress, null, 2); // Pretty-print for readability
+      const blob = new Blob([progressData], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'prompt-challenge-progress.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Failed to save progress:", error);
+      alert("An error occurred while saving progress.");
+    }
+  };
+
+  const handleLoadProgressClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileLoad = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
       return;
     }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result;
+        if (typeof text !== 'string') {
+          throw new Error("Failed to read file content.");
+        }
+        
+        const loadedProgressJson: Record<string, ChallengeProgress> = JSON.parse(text);
+
+        if (typeof loadedProgressJson !== 'object' || loadedProgressJson === null) {
+            throw new Error("Invalid progress file: data is not a valid JSON object.");
+        }
+        
+        const newProgress: Record<number, ChallengeProgress> = {};
+        
+        for (const key in loadedProgressJson) {
+          if (Object.prototype.hasOwnProperty.call(loadedProgressJson, key)) {
+            const challengeId = parseInt(key, 10);
+            if (isNaN(challengeId)) {
+                throw new Error(`Invalid key in progress file: "${key}". Expected a number.`);
+            }
+            const progressItem = loadedProgressJson[key];
+            if (
+              !progressItem ||
+              !Object.values(ChallengeStatus).includes(progressItem.status) ||
+              typeof progressItem.streak !== 'number' ||
+              typeof progressItem.previousSimilarityScore !== 'number'
+            ) {
+              throw new Error(`Data for challenge ${key} is malformed.`);
+            }
+            newProgress[challengeId] = progressItem;
+          }
+        }
+        
+        // Update state
+        setChallengeProgress(newProgress);
+        localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(newProgress));
+        setShowProfileDropdown(false);
+
+        // Recalculate and set the current challenge index based on loaded data
+        const statuses = CHALLENGES.map(c => newProgress[c.id]?.status);
+        const lastCompleted = statuses.lastIndexOf(ChallengeStatus.COMPLETED);
+        const nextChallenge = lastCompleted + 1;
+        setCurrentChallengeIndex(nextChallenge < CHALLENGES.length ? nextChallenge : lastCompleted > -1 ? lastCompleted : 0);
+
+      } catch (error) {
+        console.error("Failed to load or parse progress file:", error);
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+        alert(`Failed to load progress file. Please ensure it is a valid progress JSON. \n\nDetails: ${errorMessage}`);
+      } finally {
+        // Reset file input to allow loading the same file again
+        if (event.target) {
+            event.target.value = '';
+        }
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleSelectChallenge = useCallback((index: number) => {
+    if (challengeProgress[CHALLENGES[index].id]?.status !== ChallengeStatus.LOCKED) {
+      setCurrentChallengeIndex(index);
+      setGeneratedImage(null);
+      setAnalysisResult(null);
+      setError(null);
+      setPrompt('');
+    }
+  }, [challengeProgress]);
+
+  const handleGenerate = useCallback(async () => {
     setIsLoading(true);
-    setError(null);
-    setAnalysisResult(null);
     setGeneratedImage(null);
+    setAnalysisResult(null);
+    setError(null);
 
     const currentChallenge = CHALLENGES[currentChallengeIndex];
-    const cacheKey = `${currentChallenge.id}::${prompt.trim()}`;
-
-    if (promptCache[cacheKey]) {
-      setLoadingMessage('LOADING FROM CACHE...');
-      await new Promise(resolve => setTimeout(resolve, 300));
-      const { imageB64, analysisResult: cachedResult } = promptCache[cacheKey];
-      setGeneratedImage(`data:image/jpeg;base64,${imageB64}`);
-      setAnalysisResult(cachedResult);
-      setIsLoading(false);
-      setLoadingMessage('');
-      return;
-    }
-    
-    const currentProgress = challengeProgress[currentChallenge.id];
 
     try {
-      setLoadingMessage('SYNTHESIZING IMAGE...');
-      const imageB64 = await generateImage(prompt, selectedService);
-      setGeneratedImage(`data:image/jpeg;base64,${imageB64}`);
+      setLoadingMessage('Generating image...');
+      const generatedImageBase64 = await generateImage(prompt, selectedService);
+      setGeneratedImage(`data:image/jpeg;base64,${generatedImageBase64}`);
 
-      setLoadingMessage('ANALYZING RESULTS...');
-      const result = await analyzeImages(currentChallenge, imageB64, prompt);
+      setLoadingMessage('Analyzing results...');
+      const result = await analyzeImages(currentChallenge, generatedImageBase64, prompt);
       setAnalysisResult(result);
-      
-      setPromptCache(prev => ({
-        ...prev,
-        [cacheKey]: { imageB64, analysisResult: result },
-      }));
 
-      const newSimilarityScore = result.similarityScore;
-      const oldSimilarityScore = currentProgress.previousSimilarityScore;
+      const isPassed = result.similarityScore >= PASS_THRESHOLD;
+
+      const currentProgress = challengeProgress[currentChallenge.id];
       let newStreak = currentProgress.streak;
-
-      if (newSimilarityScore > oldSimilarityScore) {
-        newStreak++;
-        setStreakChange('increase');
-      } else if (newSimilarityScore < oldSimilarityScore) {
-        newStreak = Math.max(0, newStreak - 2);
-        setStreakChange('decrease');
+      if (result.similarityScore > currentProgress.previousSimilarityScore) {
+          newStreak++;
+          setStreakChange('increase');
+      } else if (result.similarityScore < currentProgress.previousSimilarityScore) {
+          newStreak = Math.max(0, newStreak - 2);
+          setStreakChange('decrease');
       } else {
-        setStreakChange('none');
+          setStreakChange('none');
       }
 
-      setChallengeProgress(prev => {
-        const newProgress = { ...prev };
-        
-        newProgress[currentChallenge.id] = {
-            ...newProgress[currentChallenge.id],
-            streak: newStreak,
-            previousSimilarityScore: newSimilarityScore,
-            status: (newSimilarityScore >= PASS_THRESHOLD) ? ChallengeStatus.COMPLETED : newProgress[currentChallenge.id].status,
-        };
+      const updatedProgress = { ...challengeProgress };
+      updatedProgress[currentChallenge.id] = {
+        ...updatedProgress[currentChallenge.id],
+        streak: newStreak,
+        previousSimilarityScore: result.similarityScore,
+      };
 
-        if (newSimilarityScore >= PASS_THRESHOLD && currentChallengeIndex + 1 < CHALLENGES.length) {
-            const nextChallengeId = CHALLENGES[currentChallengeIndex + 1].id;
-            if (newProgress[nextChallengeId].status === ChallengeStatus.LOCKED) {
-                newProgress[nextChallengeId].status = ChallengeStatus.UNLOCKED;
-            }
+      if (isPassed && updatedProgress[currentChallenge.id].status !== ChallengeStatus.COMPLETED) {
+        updatedProgress[currentChallenge.id].status = ChallengeStatus.COMPLETED;
+        if (currentChallengeIndex + 1 < CHALLENGES.length) {
+          const nextChallengeId = CHALLENGES[currentChallengeIndex + 1].id;
+          if (updatedProgress[nextChallengeId].status === ChallengeStatus.LOCKED) {
+            updatedProgress[nextChallengeId].status = ChallengeStatus.UNLOCKED;
+          }
         }
-        return newProgress;
-      });
+      }
 
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'An unexpected error occurred.');
+      setChallengeProgress(updatedProgress);
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
     }
-  }, [prompt, currentChallengeIndex, selectedService, challengeProgress, promptCache]);
-
-  const handleSelectChallenge = (index: number) => {
-    const challengeId = CHALLENGES[index].id;
-    if (challengeProgress[challengeId]?.status !== ChallengeStatus.LOCKED) {
-      setCurrentChallengeIndex(index);
-      setPrompt('');
-      setGeneratedImage(null);
-      setAnalysisResult(null);
-      setError(null);
-    }
-  };
+  }, [prompt, currentChallengeIndex, challengeProgress, selectedService]);
 
   const handleNextChallenge = () => {
-    const nextIndex = currentChallengeIndex + 1;
-    if (nextIndex < CHALLENGES.length) {
-      handleSelectChallenge(nextIndex);
-    }
-  };
-
-  const handleSaveApiKey = (key: string) => {
-    if (key) {
-      localStorage.setItem('gemini-api-key', key);
-      try {
-        initializeAi(key);
-        setIsModalOpen(false);
-        setIsInitialized(true);
-      } catch (err: any) {
-        setError(err.message);
-      }
+    if (currentChallengeIndex < CHALLENGES.length - 1) {
+      handleSelectChallenge(currentChallengeIndex + 1);
     }
   };
 
   const currentChallenge = CHALLENGES[currentChallengeIndex];
-  const currentChallengeSpecificProgress = challengeProgress[currentChallenge?.id];
-  const challengeStatuses = Object.values(challengeProgress).map(p => p.status);
+  const currentProgress = challengeProgress[currentChallenge.id];
+
+  const handleApiKeySave = (apiKey: string) => {
+    localStorage.setItem('gemini-api-key', apiKey);
+    initializeAi(apiKey);
+    setIsInitialized(true);
+    setIsModalOpen(false);
+  };
   
-  if (!currentChallengeSpecificProgress) {
-      return null; // or a loading state
+  if (!user) {
+    return (
+      <div className={`w-full min-h-screen flex items-center justify-center p-4 bg-cyber-bg bg-[linear-gradient(to_bottom,rgba(0,0,0,0.8),rgba(0,0,0,0.8)),url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2240%22%20height%3D%2240%22%20viewBox%3D%220%200%2040%2040%22%3E%3Cg%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%2300f2ff%22%20fill-opacity%3D%220.1%22%3E%3Cpath%20d%3D%22M0%2038.59l2.83-2.83L0%2032.93V38.59zM0%200h4.24l2.83%202.83L0%209.66V0zM38.59%200l-2.83%202.83L38.59%209.66V0zM38.59%2038.59l-2.83-2.83L38.59%2032.93V38.59zM20%2017.17L37.17%200H22.83L5%2017.83l15%2015%2015-15L22.83%200H37.17L20%2017.17z%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')]`}>
+         <div className={`transition-transform duration-1000 ${isHidingAuth ? 'scale-0' : 'scale-100'}`}>
+          <div className="max-w-md w-full">
+            <h1 className="text-5xl font-display font-bold text-cyber-primary text-center mb-2 animate-glow title-scan">PROMPT ENGINEERING</h1>
+            <h2 className="text-2xl font-display text-cyber-accent text-center mb-8 animate-flicker">CHALLENGE</h2>
+            {authMode === 'login' ? (
+              <>
+                <AuthForm onSubmit={handleLogin} type="login" />
+                <p className="text-center mt-4 text-cyber-dim">
+                  New agent?{' '}
+                  <button onClick={() => setAuthMode('signup')} className="text-cyber-primary hover:underline">
+                    Create an ID
+                  </button>
+                </p>
+              </>
+            ) : (
+              <>
+                <AuthForm onSubmit={handleSignup} type="signup" />
+                <p className="text-center mt-4 text-cyber-dim">
+                  Already registered?{' '}
+                  <button onClick={() => setAuthMode('login')} className="text-cyber-primary hover:underline">
+                    Login
+                  </button>
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
     <>
-      {!user ? (
-        <div className="relative min-h-screen text-white flex flex-col items-center justify-center p-4 overflow-hidden" style={{
-          backgroundImage: `
-            linear-gradient(rgba(10, 10, 26, 0.8), rgba(10, 10, 26, 0.8)),
-            repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0, 242, 255, 0.1) 1px, rgba(0, 242, 255, 0.1) 2px),
-            repeating-linear-gradient(90deg, transparent, transparent 1px, rgba(0, 242, 255, 0.1) 1px, rgba(0, 242, 255, 0.1) 2px)
-          `,
-          backgroundSize: '100% 100%, 50px 50px, 50px 50px',
-          animation: 'grid-pan 60s linear infinite'
-        }}>
-          <div className={`relative z-10 w-full max-w-md ${isHidingAuth ? 'animate-fade-out-up' : 'animate-fade-in'}`}>
-            <AuthForm
-              onSubmit={authMode === 'login' ? handleLogin : handleSignup}
-              type={authMode}
-            />
-            <div className="flex justify-center gap-4 mt-6">
-              <button
-                className={`py-2 px-6 rounded-md font-bold transition-all duration-300 border-2 ${authMode === 'login' ? 'bg-cyber-primary text-cyber-bg scale-110 shadow-lg shadow-cyber-primary/40 border-cyber-primary' : 'bg-transparent text-cyber-primary border-cyber-primary/50'}`}
-                onClick={() => setAuthMode('login')}
-              >
-                LOGIN
-              </button>
-              <button
-                className={`py-2 px-6 rounded-md font-bold transition-all duration-300 border-2 ${authMode === 'signup' ? 'bg-cyber-primary text-cyber-bg scale-110 shadow-lg shadow-cyber-primary/40 border-cyber-primary' : 'bg-transparent text-cyber-primary border-cyber-primary/50'}`}
-                onClick={() => setAuthMode('signup')}
-              >
-                SIGN UP
-              </button>
+      <ApiKeyModal isOpen={isModalOpen && !isInitialized} onSave={handleApiKeySave} onClose={() => setIsModalOpen(false)} isClosable={isInitialized} />
+      <div className="bg-cyber-bg min-h-screen bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(0,242,255,0.2),rgba(255,255,255,0))] bg-[length:100px_100px] animate-grid-pan">
+      <audio ref={audioRef} src={audioSources.backgroundMusic} loop />
+      <audio ref={streakUpAudioRef} src={audioSources.streakUp} />
+      <audio ref={streakDownAudioRef} src={audioSources.streakDown} />
+      <input type="file" ref={fileInputRef} onChange={handleFileLoad} accept=".json" style={{ display: 'none' }} />
+
+      <header className="bg-cyber-surface/80 backdrop-blur-sm p-4 border-b-2 border-cyber-primary/30 flex justify-between items-center relative z-10">
+        <h1 className="text-xl font-display font-bold text-cyber-primary tracking-widest animate-flicker">P.E.C. TERMINAL</h1>
+        <div className="hidden md:flex items-center">
+            <span className="text-cyber-dim mr-4 text-sm">SERVICE:</span>
+            <select
+                value={selectedService}
+                onChange={(e) => setSelectedService(e.target.value as ImageService)}
+                className="bg-cyber-bg border border-cyber-secondary/50 rounded-md p-2 text-cyber-text focus:outline-none focus:ring-2 focus:ring-cyber-secondary"
+            >
+                <option value="gemini">Gemini 3.0</option>
+                <option value="pollinations">Pollinations (Flux)</option>
+            </select>
+        </div>
+        <div className="flex items-center gap-4">
+            <button onClick={() => setIsMuted(!isMuted)} className="text-cyber-dim hover:text-cyber-primary transition-colors" aria-label={isMuted ? 'Unmute' : 'Mute'}>
+              {isMuted ? 
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
+                :
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+              }
+            </button>
+            <div className="relative">
+                <button onClick={() => setShowProfileDropdown(!showProfileDropdown)} className="flex items-center gap-2 p-2 rounded-md hover:bg-cyber-surface transition-colors" aria-haspopup="true" aria-expanded={showProfileDropdown}>
+                    <span className="text-cyber-text font-semibold">{user.email}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-cyber-dim transition-transform ${showProfileDropdown ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                </button>
+                {showProfileDropdown && (
+                    <div className="absolute right-0 mt-2 w-56 bg-cyber-surface rounded-md shadow-lg border-2 border-cyber-secondary/50 z-20 animate-fade-in">
+                        <ul className="py-1">
+                            <li><button onClick={() => { setIsModalOpen(true); setShowProfileDropdown(false); }} className="w-full text-left px-4 py-2 text-sm text-cyber-text hover:bg-cyber-primary hover:text-cyber-bg transition-colors">API Key</button></li>
+                            <li><button onClick={handleSaveProgress} className="w-full text-left px-4 py-2 text-sm text-cyber-text hover:bg-cyber-primary hover:text-cyber-bg transition-colors">Save Progress</button></li>
+                            <li><button onClick={() => { handleLoadProgressClick(); setShowProfileDropdown(false); }} className="w-full text-left px-4 py-2 text-sm text-cyber-text hover:bg-cyber-primary hover:text-cyber-bg transition-colors">Load Progress</button></li>
+                            <li><hr className="border-cyber-dim/20 my-1"/></li>
+                            <li><button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500 hover:text-white transition-colors">Logout</button></li>
+                        </ul>
+                    </div>
+                )}
             </div>
+            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="md:hidden text-cyber-dim hover:text-cyber-primary transition-colors" aria-label="Toggle menu">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" /></svg>
+            </button>
+        </div>
+      </header>
+       {/* Mobile Menu */}
+      {isMenuOpen && (
+        <div className="md:hidden bg-cyber-surface/95 p-4 border-b-2 border-cyber-primary/30 space-y-2 animate-fade-in">
+            <label htmlFor="mobile-service-select" className="block text-cyber-dim text-sm">SERVICE:</label>
+             <select
+                id="mobile-service-select"
+                value={selectedService}
+                onChange={(e) => setSelectedService(e.target.value as ImageService)}
+                className="w-full bg-cyber-bg border border-cyber-secondary/50 rounded-md p-2 text-cyber-text focus:outline-none focus:ring-2 focus:ring-cyber-secondary"
+            >
+                <option value="gemini">Gemini 3.0</option>
+                <option value="pollinations">Pollinations (Flux)</option>
+            </select>
+        </div>
+      )}
+
+
+      <main className="p-4 sm:p-6 lg:p-8">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          <div className="md:col-span-1 lg:col-span-1">
+            {currentProgress && (
+              <ChallengeSelector
+                challenges={CHALLENGES}
+                statuses={CHALLENGES.map(c => challengeProgress[c.id]?.status || ChallengeStatus.LOCKED)}
+                currentChallengeId={currentChallenge.id}
+                onSelectChallenge={handleSelectChallenge}
+              />
+            )}
+          </div>
+
+          <div className="md:col-span-2 lg:col-span-3">
+            {currentProgress && (
+              <ChallengeView
+                challenge={currentChallenge}
+                prompt={prompt}
+                onPromptChange={setPrompt}
+                onGenerate={handleGenerate}
+                isLoading={isLoading}
+                loadingMessage={loadingMessage}
+                generatedImage={generatedImage}
+                analysisResult={analysisResult}
+                error={error}
+                onNextChallenge={handleNextChallenge}
+                isPassed={!!analysisResult && analysisResult.similarityScore >= PASS_THRESHOLD}
+                isNextChallengeAvailable={currentChallengeIndex < CHALLENGES.length - 1}
+                previousSimilarityScore={currentProgress.previousSimilarityScore}
+              />
+            )}
           </div>
         </div>
-      ) : (
-        <>
-          {/* NOTE: Add audio files to your project at the specified paths for this to work */}
-          <audio ref={audioRef} src="/audio/cyberpunk-theme.mp3" loop />
-          <audio ref={streakUpAudioRef} src="/audio/streak-up.mp3" />
-          <audio ref={streakDownAudioRef} src="/audio/streak-down.mp3" />
-          <ApiKeyModal
-            isOpen={isModalOpen}
-            onSave={handleSaveApiKey}
-            onClose={() => setIsModalOpen(false)}
-            isClosable={isInitialized}
-          />
-          {isInitialized && (
-            <div className="min-h-screen font-sans animate-fade-in">
-              <header className="py-4 px-8 bg-cyber-surface/50 backdrop-blur-sm border-b border-cyber-primary/20 flex justify-between items-center">
-                <h1 className="title-scan text-2xl md:text-3xl font-display font-bold text-white tracking-widest">
-                  <span className="text-cyber-primary">PROMPT</span>//CHALLENGE
-                </h1>
-                <div className="flex items-center gap-6">
-                   <button onClick={() => setIsMuted(prev => !prev)} className="text-cyber-dim hover:text-cyber-primary transition-colors" aria-label={isMuted ? 'Unmute' : 'Mute'}>
-                    {isMuted ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
-                      </svg>
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5 5 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
-                      </svg>
-                    )}
-                  </button>
-                  <div className={`flex items-center gap-2 text-cyber-accent font-bold ${streakChange === 'increase' ? 'animate-pulse-green' : ''} ${streakChange === 'decrease' ? 'animate-pulse-red text-red-500' : ''}`} title={`${currentChallengeSpecificProgress.streak} similarity score improvements!`}>
-                    <span className="text-2xl drop-shadow-[0_0_5px_#00ff7f]">🔥</span>
-                    <span className="text-lg">{currentChallengeSpecificProgress.streak}</span>
-                  </div>
-                   <div className="relative">
-                    <select
-                      id="image-service"
-                      value={selectedService}
-                      onChange={e => setSelectedService(e.target.value as ImageService)}
-                      className="appearance-none py-2 pl-4 pr-10 rounded-md bg-cyber-surface border border-cyber-secondary/50 text-white font-bold transition-colors focus:outline-none focus:border-cyber-secondary cursor-pointer"
-                    >
-                      <option value="pollinations">Pollinations</option>
-                      <option value="gemini">Imagen 3</option>
-                    </select>
-                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-cyber-secondary">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                      </div>
-                  </div>
-                  <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="hidden md:block py-2 px-4 bg-cyber-surface border border-cyber-dim/50 hover:border-cyber-dim text-white text-sm font-bold rounded-md transition-colors"
-                    aria-label="Change API Key"
-                  >
-                    API KEY
-                  </button>
-                  <div className="relative inline-block text-left">
-                    <button
-                      className="flex items-center gap-2"
-                      onClick={() => setShowProfileDropdown((prev) => !prev)}
-                    >
-                      <div className="w-10 h-10 rounded-full bg-cyber-primary text-cyber-bg font-bold text-xl flex items-center justify-center border-2 border-cyber-primary/50">
-                        {user.email[0].toUpperCase()}
-                      </div>
-                    </button>
-                    {showProfileDropdown && (
-                      <div className="absolute right-0 mt-4 w-48 bg-cyber-surface rounded-md shadow-lg z-50 border-2 border-cyber-secondary/50">
-                        <div className="p-2 text-center text-cyber-dim border-b border-cyber-secondary/30">{user.email}</div>
-                        <button
-                          className="w-full text-left px-4 py-2 text-sm text-cyber-text hover:bg-cyber-secondary hover:text-cyber-bg transition-colors"
-                          onClick={() => { setIsModalOpen(true); setShowProfileDropdown(false);}}
-                        >
-                          Change API Key
-                        </button>
-                        <button
-                          className="w-full text-left px-4 py-2 text-sm text-cyber-text hover:bg-red-500 hover:text-white rounded-b-md transition-colors"
-                          onClick={() => { setShowProfileDropdown(false); handleLogout(); }}
-                        >
-                          Logout
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </header>
-              <main className="flex flex-col md:flex-row p-4 md:p-8 gap-8">
-                <aside className="w-full md:w-1/4 lg:w-1/5">
-                  <ChallengeSelector
-                    challenges={CHALLENGES}
-                    statuses={challengeStatuses}
-                    currentChallengeId={currentChallenge.id}
-                    onSelectChallenge={handleSelectChallenge}
-                  />
-                </aside>
-                <div className="flex-1">
-                  {currentChallenge && (
-                    <ChallengeView
-                      challenge={currentChallenge}
-                      prompt={prompt}
-                      onPromptChange={setPrompt}
-                      onGenerate={handleGenerateAndAnalyze}
-                      isLoading={isLoading}
-                      loadingMessage={loadingMessage}
-                      generatedImage={generatedImage}
-                      analysisResult={analysisResult}
-                      error={error}
-                      onNextChallenge={handleNextChallenge}
-                      isPassed={!!analysisResult && analysisResult.similarityScore >= PASS_THRESHOLD}
-                      isNextChallengeAvailable={currentChallengeIndex + 1 < CHALLENGES.length}
-                      previousSimilarityScore={currentChallengeSpecificProgress.previousSimilarityScore}
-                    />
-                  )}
-                </div>
-              </main>
-            </div>
-          )}
-        </>
-      )}
+      </main>
+      </div>
     </>
   );
 };

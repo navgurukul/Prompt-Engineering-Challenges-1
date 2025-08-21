@@ -38,10 +38,10 @@ const Hexagon: React.FC<{ size: number }> = ({ size }) => {
 
 const ChallengeSelector: React.FC<ChallengeSelectorProps> = ({ challenges, statuses, currentChallengeId, onSelectChallenge }) => {
   return (
-    <div className="bg-cyber-surface/70 backdrop-blur-sm rounded-lg p-4 border-2 border-cyber-primary/30 h-full flex flex-col animate-border-flicker">
+    <div className="bg-cyber-surface/70 backdrop-blur-sm rounded-lg p-4 border-2 border-cyber-primary/30 flex flex-col animate-border-flicker">
       <h2 className="text-2xl font-display font-bold mb-4 text-cyber-primary text-center tracking-widest">MISSIONS</h2>
-      <div className="flex-grow">
-        <svg viewBox="0 0 260 520" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+      <div>
+        <svg viewBox="0 0 260 520" width="100%" preserveAspectRatio="xMidYMid meet">
             <path d={roadPathD} stroke="url(#line-gradient)" strokeWidth="6" fill="none" />
             <defs>
                 <linearGradient id="line-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
