@@ -1,7 +1,4 @@
-
-export type User = {
-  email: string;
-};
+import { User } from '../types';
 
 let currentUser: User | null = null;
 

@@ -22,3 +22,9 @@ export interface ChallengeProgress {
   streak: number;
   previousSimilarityScore: number;
 }
+
+export type ImageService = 'gemini' | 'pollinations';
+
+export type User = {
+  email: string;
+};
