@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { login, signup, logout, getCurrentUser } from './services/authService';
 import { ChallengeStatus, ChallengeProgress, User } from './types';
 import { CHALLENGES } from './constants';
-import { initializeAi } from './services/ApiService';
+import { initializeAi } from './services/analysisService';
 import { audioSources } from './services/audioService';
 import AuthScreen from './components/AuthScreen';
 import ChallengeHost from './components/ChallengeHost';

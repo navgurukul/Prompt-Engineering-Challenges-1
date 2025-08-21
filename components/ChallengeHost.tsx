@@ -3,7 +3,8 @@ import { Challenge, ChallengeStatus, AnalysisResult, ChallengeProgress, ImageSer
 import { CHALLENGES, PASS_THRESHOLD } from '../constants';
 import ChallengeSelector from './ChallengeSelector';
 import ChallengeView from './ChallengeView';
-import { generateImage, analyzeImages } from '../services/ApiService';
+import { generateImage } from '../services/ApiService';
+import { analyzeAndSpeak, stopSpeaking } from '../services/analysisService';
 import Header from './Header';
 import MobileMenu from './MobileMenu';
 import Spinner from './Spinner';
@@ -38,6 +39,7 @@ const ChallengeHost: React.FC<ChallengeHostProps> = ({
     const [error, setError] = useState<string | null>(null);
     const [selectedService, setSelectedService] = useState<ImageService>('gemini');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const syncChallengeIndexOnProgressChange = useRef(true);
 
@@ -123,8 +125,8 @@ const ChallengeHost: React.FC<ChallengeHostProps> = ({
 
     const handleGenerateAndAnalyze = useCallback(async () => {
         if (!prompt) {
-          setError("Prompt cannot be empty.");
-          return;
+            setError("Prompt cannot be empty.");
+            return;
         }
         setIsLoading(true);
         setError(null);
@@ -132,68 +134,77 @@ const ChallengeHost: React.FC<ChallengeHostProps> = ({
         setGeneratedImage(null);
     
         const currentChallenge = CHALLENGES[currentChallengeIndex];
-        const currentProgress = challengeProgress[currentChallenge.id];
     
         try {
-          setLoadingMessage('SYNTHESIZING IMAGE...');
-          const imageB64 = await generateImage(prompt, selectedService);
-          setGeneratedImage(`data:image/jpeg;base64,${imageB64}`);
+            setLoadingMessage('SYNTHESIZING IMAGE...');
+            const imageB64 = await generateImage(prompt, selectedService);
+            setGeneratedImage(`data:image/jpeg;base64,${imageB64}`);
     
-          setLoadingMessage('ANALYZING RESULTS...');
-          const result = await analyzeImages(currentChallenge, imageB64, prompt);
-          setAnalysisResult(result);
-          
-          const newSimilarityScore = result.similarityScore;
-          const oldSimilarityScore = currentProgress.previousSimilarityScore;
-          let newStreak = currentProgress.streak;
-    
-          if (newSimilarityScore > oldSimilarityScore) {
-            newStreak++;
-            setStreakChange('increase');
-          } else if (newSimilarityScore < oldSimilarityScore) {
-            newStreak = Math.max(0, newStreak - 2);
-            setStreakChange('decrease');
-          } else {
-            setStreakChange('none');
-          }
-    
-          setChallengeProgress(prev => {
-            const newProgress = { ...prev };
+            setLoadingMessage('ANALYZING RESULTS...');
+            await analyzeAndSpeak(user, currentChallenge, imageB64, prompt, {
+                onAnalysisComplete: (result) => {
+                    setAnalysisResult(result);
+                    const currentProgress = challengeProgress[currentChallenge.id];
+                    const newSimilarityScore = result.similarityScore;
+                    const oldSimilarityScore = currentProgress.previousSimilarityScore;
+                    let newStreak = currentProgress.streak;
             
-            newProgress[currentChallenge.id] = {
-                ...newProgress[currentChallenge.id],
-                streak: newStreak,
-                previousSimilarityScore: newSimilarityScore,
-                status: (newSimilarityScore >= PASS_THRESHOLD) ? ChallengeStatus.COMPLETED : newProgress[currentChallenge.id].status,
-            };
-    
-            if (newSimilarityScore >= PASS_THRESHOLD && currentChallengeIndex + 1 < CHALLENGES.length) {
-                const nextChallengeId = CHALLENGES[currentChallengeIndex + 1].id;
-                if (newProgress[nextChallengeId].status === ChallengeStatus.LOCKED) {
-                    newProgress[nextChallengeId].status = ChallengeStatus.UNLOCKED;
-                }
-            }
-            return newProgress;
-          });
+                    if (newSimilarityScore > oldSimilarityScore) {
+                        newStreak++;
+                        setStreakChange('increase');
+                    } else if (newSimilarityScore < oldSimilarityScore) {
+                        newStreak = Math.max(0, newStreak - 2);
+                        setStreakChange('decrease');
+                    } else {
+                        setStreakChange('none');
+                    }
+            
+                    setChallengeProgress(prev => {
+                        const newProgress = { ...prev };
+                        newProgress[currentChallenge.id] = {
+                            ...newProgress[currentChallenge.id],
+                            streak: newStreak,
+                            previousSimilarityScore: newSimilarityScore,
+                            status: (newSimilarityScore >= PASS_THRESHOLD) ? ChallengeStatus.COMPLETED : newProgress[currentChallenge.id].status,
+                        };
+                
+                        if (newSimilarityScore >= PASS_THRESHOLD && currentChallengeIndex + 1 < CHALLENGES.length) {
+                            const nextChallengeId = CHALLENGES[currentChallengeIndex + 1].id;
+                            if (newProgress[nextChallengeId].status === ChallengeStatus.LOCKED) {
+                                newProgress[nextChallengeId].status = ChallengeStatus.UNLOCKED;
+                            }
+                        }
+                        return newProgress;
+                    });
+                },
+                onSpeakingStart: () => setIsSpeaking(true),
+                onSpeakingEnd: () => setIsSpeaking(false),
+            });
     
         } catch (err: any) {
-          console.error(err);
-          setError(err.message || 'An unexpected error occurred.');
+            console.error(err);
+            setError(err.message || 'An unexpected error occurred.');
+            setIsSpeaking(false);
         } finally {
-          setIsLoading(false);
-          setLoadingMessage('');
+            setIsLoading(false);
+            setLoadingMessage('');
         }
-      }, [prompt, currentChallengeIndex, selectedService, challengeProgress, setChallengeProgress, setStreakChange]);
+    }, [prompt, currentChallengeIndex, selectedService, challengeProgress, setChallengeProgress, setStreakChange, user]);
     
       const handleSelectChallenge = (index: number) => {
         const challengeId = CHALLENGES[index].id;
         if (challengeProgress[challengeId]?.status !== ChallengeStatus.LOCKED) {
+          stopSpeaking(() => setIsSpeaking(false));
           setCurrentChallengeIndex(index);
           setPrompt('');
           setGeneratedImage(null);
           setAnalysisResult(null);
           setError(null);
         }
+      };
+
+      const handleStopSpeaking = () => {
+        stopSpeaking(() => setIsSpeaking(false));
       };
     
       const handleNextChallenge = () => {
@@ -273,6 +284,8 @@ const ChallengeHost: React.FC<ChallengeHostProps> = ({
                     isPassed={!!analysisResult && analysisResult.similarityScore >= PASS_THRESHOLD}
                     isNextChallengeAvailable={currentChallengeIndex + 1 < CHALLENGES.length}
                     previousSimilarityScore={currentChallengeSpecificProgress.previousSimilarityScore}
+                    isSpeaking={isSpeaking}
+                    onStopSpeaking={handleStopSpeaking}
                 />
                 )}
             </div>
