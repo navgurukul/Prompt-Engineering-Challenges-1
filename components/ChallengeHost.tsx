@@ -39,14 +39,17 @@ const ChallengeHost: React.FC<ChallengeHostProps> = ({
     const [selectedService, setSelectedService] = useState<ImageService>('gemini');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const syncChallengeIndexOnProgressChange = useRef(true);
 
     useEffect(() => {
-        // Set initial challenge based on loaded progress
-        if (challengeProgress && Object.keys(challengeProgress).length > 0) {
+        // Set challenge based on progress, but only on initial load or manual file load.
+        if (syncChallengeIndexOnProgressChange.current && challengeProgress && Object.keys(challengeProgress).length > 0) {
             const statuses = CHALLENGES.map(c => challengeProgress[c.id]?.status);
             const lastCompleted = statuses.lastIndexOf(ChallengeStatus.COMPLETED);
             const nextChallenge = lastCompleted + 1;
             setCurrentChallengeIndex(nextChallenge < CHALLENGES.length ? nextChallenge : lastCompleted > -1 ? lastCompleted : 0);
+            // After syncing, disable it until it's explicitly enabled again (e.g., by file load)
+            syncChallengeIndexOnProgressChange.current = false;
         }
     }, [challengeProgress]);
     
@@ -104,6 +107,8 @@ const ChallengeHost: React.FC<ChallengeHostProps> = ({
                     newProgress[challengeId] = progressItem;
                 }
                 
+                // Enable challenge index sync before setting new progress
+                syncChallengeIndexOnProgressChange.current = true;
                 setChallengeProgress(newProgress);
 
             } catch (error) {
@@ -243,7 +248,7 @@ const ChallengeHost: React.FC<ChallengeHostProps> = ({
                 className="hidden"
             />
           
-            <main className="flex flex-col md:flex-row p-4 md:p-8 gap-8">
+            <main className="relative z-0 flex flex-col md:flex-row p-4 md:p-8 gap-8">
             <aside className="hidden md:block w-full md:w-1/4 lg:w-1/5">
                 <ChallengeSelector
                 challenges={CHALLENGES}
