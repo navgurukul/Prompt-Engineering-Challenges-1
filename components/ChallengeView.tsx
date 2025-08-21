@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Challenge, AnalysisResult } from '../types';
 import Spinner from './Spinner';
-import { getLocalImageAsBlobUrl } from '../services/ApiService';
+import { getLocalImageAsBlobUrl } from '../services/analysisService';
 import SimilarityMeter from './SimilarityMeter';
 
 interface ChallengeViewProps {

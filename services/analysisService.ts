@@ -23,6 +23,28 @@ export const getAi = (): GoogleGenAI => {
   return ai;
 };
 
+/**
+ * Fetches an image from a local URL and returns it as a blob URL.
+ * This is useful for ensuring images are loaded and displayed correctly
+ * when relative paths might be problematic.
+ * @param url The local URL of the image (e.g., '/challenges/challenge-1.jpg')
+ * @returns A promise that resolves to a blob URL (e.g., 'blob:http://...')
+ */
+export const getLocalImageAsBlobUrl = async (url: string): Promise<string> => {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image from URL: ${url}. Status: ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  } catch (error) {
+    console.error(`Error fetching local image ${url}:`, error);
+    // Fallback to the original URL if fetching fails, allowing the browser to try and load it directly.
+    return url;
+  }
+};
+
 
 // --- Image Stitching ---
 
@@ -41,31 +63,41 @@ async function stitchImages(
   const generatedImage = new Image();
   targetImage.crossOrigin = 'anonymous';
 
-  const loadTargetPromise = new Promise<HTMLImageElement>((resolve, reject) => {
-    targetImage.onload = () => resolve(targetImage);
-    targetImage.onerror = () => reject(new Error(`Failed to load target image: ${targetImageUrl}`));
-    targetImage.src = targetImageUrl;
-  });
+  // Use getLocalImageAsBlobUrl to safely fetch the local target image.
+  const targetBlobUrl = await getLocalImageAsBlobUrl(targetImageUrl);
 
-  const loadGeneratedPromise = new Promise<HTMLImageElement>((resolve, reject) => {
-    generatedImage.onload = () => resolve(generatedImage);
-    generatedImage.onerror = () => reject(new Error('Failed to load generated image from base64'));
-    generatedImage.src = `data:image/jpeg;base64,${generatedImageBase64}`;
-  });
+  try {
+    const loadTargetPromise = new Promise<HTMLImageElement>((resolve, reject) => {
+      targetImage.onload = () => resolve(targetImage);
+      targetImage.onerror = () => reject(new Error(`Failed to load target image: ${targetImageUrl}`));
+      targetImage.src = targetBlobUrl;
+    });
+  
+    const loadGeneratedPromise = new Promise<HTMLImageElement>((resolve, reject) => {
+      generatedImage.onload = () => resolve(generatedImage);
+      generatedImage.onerror = () => reject(new Error('Failed to load generated image from base64'));
+      generatedImage.src = `data:image/jpeg;base64,${generatedImageBase64}`;
+    });
 
-  const [img1, img2] = await Promise.all([loadTargetPromise, loadGeneratedPromise]);
+    const [img1, img2] = await Promise.all([loadTargetPromise, loadGeneratedPromise]);
 
-  const canvasWidth = img1.width + img2.width;
-  const canvasHeight = Math.max(img1.height, img2.height);
+    const canvasWidth = img1.width + img2.width;
+    const canvasHeight = Math.max(img1.height, img2.height);
 
-  canvas.width = canvasWidth;
-  canvas.height = canvasHeight;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
 
-  ctx.drawImage(img1, 0, 0);
-  ctx.drawImage(img2, img1.width, 0);
+    ctx.drawImage(img1, 0, 0);
+    ctx.drawImage(img2, img1.width, 0);
 
-  // Return base64 string without the data URL prefix
-  return canvas.toDataURL('image/jpeg').split(',')[1];
+    // Return base64 string without the data URL prefix
+    return canvas.toDataURL('image/jpeg').split(',')[1];
+  } finally {
+      // Clean up the blob URL to avoid memory leaks
+      if (targetBlobUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(targetBlobUrl);
+      }
+  }
 }
 
 
@@ -210,8 +242,8 @@ Speed of speaking: Very slow. A student named ${userName} is trying to generate 
 Analyze the provided image which contains two images side-by-side. The image on the LEFT is the "target image", and the image on the RIGHT is the student's generated image.
 
 Provide:
-1. A 'similarityScore' from 0-100.
-2. A 'feedback' JSON array of up to 3 strings with prompt improvement suggestions.
+1. A 'similarityScore' from 0-100. (Only through text)
+2. A 'feedback' JSON array of up to 3 strings with prompt improvement suggestions. (both text and audio)
 
 Respond ONLY with a JSON object.`;
 
@@ -221,7 +253,7 @@ The student's prompt was: "${userPrompt}".
 `;
 
     const config = {
-      responseModalities: [Modality.AUDIO],
+      responseModalities: [Modality.AUDIO, Modality.TEXT],
       mediaResolution: MediaResolution.MEDIA_RESOLUTION_MEDIUM,
       speechConfig: {
         languageCode: 'en-IN',
@@ -277,6 +309,8 @@ The student's prompt was: "${userPrompt}".
 
     while (!turnComplete || responseQueue.length > 0) {
       const message = responseQueue.shift();
+
+      // console.log("[AnalysisService] message: ", message);
       if (!message) {
         await new Promise(resolve => setTimeout(resolve, 50));
         continue;
@@ -304,9 +338,10 @@ The student's prompt was: "${userPrompt}".
         console.error("Failed to parse JSON response:", accumulatedJson, e);
         throw new Error("Failed to parse analysis from model.");
       }
-    } else {
-      throw new Error("Model did not return any analysis.");
-    }
+    } 
+    // else {
+    //   throw new Error("Model did not return any analysis.");
+    // }
 
     if (audioChunks.length > 0 && currentMimeType) {
       callbacks.onSpeakingStart();

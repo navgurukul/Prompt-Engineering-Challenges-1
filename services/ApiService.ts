@@ -48,25 +48,3 @@ export const generateImage = async (prompt: string, service: ImageService = 'pol
     throw new Error('Unknown image service selected');
   }
 };
-
-/**
- * Fetches an image from a local URL and returns it as a blob URL.
- * This is useful for ensuring images are loaded and displayed correctly
- * when relative paths might be problematic.
- * @param url The local URL of the image (e.g., '/challenges/challenge-1.jpg')
- * @returns A promise that resolves to a blob URL (e.g., 'blob:http://...')
- */
-export const getLocalImageAsBlobUrl = async (url: string): Promise<string> => {
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image from URL: ${url}. Status: ${response.statusText}`);
-    }
-    const blob = await response.blob();
-    return URL.createObjectURL(blob);
-  } catch (error) {
-    console.error(`Error fetching local image ${url}:`, error);
-    // Fallback to the original URL if fetching fails, allowing the browser to try and load it directly.
-    return url;
-  }
-};
