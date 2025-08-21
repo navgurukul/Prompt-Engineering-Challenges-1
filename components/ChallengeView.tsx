@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Challenge, AnalysisResult } from '../types';
 import Spinner from './Spinner';
 import { getLocalImageAsBlobUrl } from '../services/ApiService';
+import SimilarityMeter from './SimilarityMeter';
 
 interface ChallengeViewProps {
   challenge: Challenge;
@@ -16,7 +17,25 @@ interface ChallengeViewProps {
   onNextChallenge: () => void;
   isPassed: boolean;
   isNextChallengeAvailable: boolean;
+  previousSimilarityScore: number;
 }
+
+const HudFrame: React.FC<{ children: React.ReactNode; title: string }> = ({ children, title }) => (
+    <div className="space-y-2">
+        <h3 className="text-lg font-display font-bold text-center text-cyber-primary tracking-widest uppercase">{title}</h3>
+        <div className="aspect-square bg-cyber-bg p-1 relative rounded-md">
+            <div className="absolute inset-0 border-2 border-cyber-primary/30 rounded-md animate-border-flicker"></div>
+            <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
+                {children}
+            </div>
+             {/* Corner brackets */}
+            <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-cyber-primary animate-pulse-corners"></div>
+            <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-cyber-primary animate-pulse-corners"></div>
+            <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-cyber-primary animate-pulse-corners"></div>
+            <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-cyber-primary animate-pulse-corners"></div>
+        </div>
+    </div>
+);
 
 const ChallengeView: React.FC<ChallengeViewProps> = ({
   challenge,
@@ -30,7 +49,8 @@ const ChallengeView: React.FC<ChallengeViewProps> = ({
   error,
   onNextChallenge,
   isPassed,
-  isNextChallengeAvailable
+  isNextChallengeAvailable,
+  previousSimilarityScore
 }) => {
   const [targetImageSrc, setTargetImageSrc] = useState<string | null>(null);
 
@@ -59,81 +79,122 @@ const ChallengeView: React.FC<ChallengeViewProps> = ({
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h2 className="text-3xl font-bold text-white">{`Challenge ${challenge.id}: ${challenge.name}`}</h2>
-        <p className="text-gray-light mt-1">{challenge.description}</p>
+        <h2 className="text-3xl font-display font-bold text-white tracking-wider">{`CHALLENGE ${challenge.id}: ${challenge.name}`}</h2>
+        <p className="text-cyber-dim mt-1 font-sans">{challenge.description}</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-2">
-          <h3 className="text-lg font-semibold text-center">Target Image</h3>
-          <div className="aspect-square bg-gray-medium rounded-lg overflow-hidden border-2 border-brand-secondary flex items-center justify-center">
-            {targetImageSrc ? (
-              <img src={targetImageSrc} alt="Target for the challenge" className="w-full h-full object-cover" />
-            ) : (
-              <Spinner />
-            )}
+      <div className="relative">
+        <div className="pr-16 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <HudFrame title="TARGET">
+                 {targetImageSrc ? (
+                  <img src={targetImageSrc} alt="Target for the challenge" className="w-full h-full object-cover" />
+                ) : (
+                  <Spinner />
+                )}
+            </HudFrame>
+            <HudFrame title="GENERATION">
+                {isLoading ? (
+                  <div className="text-center">
+                    <Spinner />
+                    <p className="mt-2 text-cyber-primary animate-flicker font-bold tracking-widest">{loadingMessage}</p>
+                  </div>
+                ) : generatedImage ? (
+                  <img src={generatedImage} alt="AI generated image" className="w-full h-full object-cover" />
+                ) : (
+                  <p className="text-cyber-dim">Awaiting image synthesis...</p>
+                )}
+            </HudFrame>
+          </div>
+
+          <div className="space-y-4">
+            <div className="relative">
+                <textarea
+                  value={prompt}
+                  onChange={(e) => onPromptChange(e.target.value)}
+                  placeholder="Enter prompt here..."
+                  className="w-full h-28 p-3 bg-cyber-surface/80 rounded-md border-2 border-cyber-secondary/50 focus:border-cyber-secondary focus:ring-2 focus:ring-cyber-secondary/50 focus:outline-none transition-all text-cyber-text placeholder:text-cyber-dim font-sans"
+                  disabled={isLoading}
+                />
+                {isLoading && (
+                  <div className="absolute inset-0 rounded-md overflow-hidden pointer-events-none">
+                    <div className="scanner-bar"></div>
+                  </div>
+                )}
+            </div>
+            <button
+              onClick={onGenerate}
+              disabled={isLoading || !prompt}
+              className="glitch-button w-full py-3 px-6 bg-cyber-primary text-cyber-bg font-bold text-lg rounded-md transition-all duration-300 disabled:bg-cyber-dim disabled:cursor-not-allowed transform hover:scale-105 active:scale-100 hover:shadow-lg hover:shadow-cyber-primary/50"
+              data-text={isLoading ? 'Processing...' : 'GENERATE & ANALYZE'}
+            >
+              {isLoading ? 'Processing...' : 'GENERATE & ANALYZE'}
+            </button>
+            {error && <p className="text-red-400 text-center">{error}</p>}
           </div>
         </div>
-        <div className="space-y-2">
-          <h3 className="text-lg font-semibold text-center">Your Generation</h3>
-          <div className="aspect-square bg-gray-medium rounded-lg flex items-center justify-center border-2 border-gray-medium overflow-hidden">
-            {isLoading ? (
-              <div className="text-center">
-                <Spinner />
-                <p className="mt-2 text-brand-light animate-pulse-fast">{loadingMessage}</p>
-              </div>
-            ) : generatedImage ? (
-              <img src={generatedImage} alt="AI generated image" className="w-full h-full object-cover" />
-            ) : (
-              <p className="text-gray-light">Your generated image will appear here.</p>
-            )}
-          </div>
-        </div>
+
+        <SimilarityMeter score={analysisResult?.similarityScore ?? previousSimilarityScore} />
       </div>
 
-      <div className="space-y-4">
-        <textarea
-          value={prompt}
-          onChange={(e) => onPromptChange(e.target.value)}
-          placeholder="Describe the image you want to generate..."
-          className="w-full h-28 p-3 bg-gray-medium/70 rounded-lg border-2 border-gray-medium focus:border-brand-primary focus:ring-brand-primary focus:outline-none transition-colors"
-          disabled={isLoading}
-        />
-        <button
-          onClick={onGenerate}
-          disabled={isLoading}
-          className="w-full py-3 px-6 bg-brand-primary hover:bg-brand-secondary text-white font-bold rounded-lg transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed transform hover:scale-105 active:scale-100"
-        >
-          {isLoading ? 'Processing...' : 'Generate & Analyze'}
-        </button>
-        {error && <p className="text-red-400 text-center">{error}</p>}
-      </div>
 
       {analysisResult && (
-        <div className="bg-gray-medium/50 p-6 rounded-lg border border-gray-medium animate-slide-in-up space-y-6">
-          <h3 className="text-2xl font-bold text-white">Analysis Result</h3>
+        <div className="bg-cyber-surface/70 p-6 rounded-lg border-2 border-cyber-primary/30 animate-slide-in-up space-y-6">
+          <h3 className="text-2xl font-display font-bold text-white tracking-wider">ANALYSIS RESULT</h3>
           
+          <div className="text-center py-6 bg-cyber-bg/50 rounded-md border border-cyber-dim/20">
+            <div className="flex flex-col items-center justify-center">
+              {analysisResult.similarityScore > previousSimilarityScore && previousSimilarityScore > 0 && (
+                <div className="text-cyber-accent animate-fade-in space-y-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" /></svg>
+                  <p className="font-bold text-2xl font-display tracking-widest">STREAK +1</p>
+                </div>
+              )}
+              {analysisResult.similarityScore < previousSimilarityScore && (
+                <div className="text-red-500 animate-fade-in space-y-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+                  <p className="font-bold text-2xl font-display tracking-widest">STREAK -2</p>
+                </div>
+              )}
+              {analysisResult.similarityScore === previousSimilarityScore && previousSimilarityScore > 0 && (
+                <div className="text-cyber-dim animate-fade-in space-y-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 12h14" /></svg>
+                  <p className="font-bold text-2xl font-display tracking-widest">STREAK UNCHANGED</p>
+                </div>
+              )}
+               {previousSimilarityScore === 0 && (
+                <div className="text-cyber-dim animate-fade-in">
+                   <p className="font-bold text-2xl font-display tracking-widest">FIRST ATTEMPT</p>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div>
-            <h4 className="text-lg font-semibold text-brand-light">Feedback</h4>
-            <ol className="list-decimal list-inside text-gray-light space-y-2 mt-2">
+            <h4 className="text-lg font-bold text-cyber-accent uppercase tracking-wider">Feedback Log</h4>
+            <ol className="list-decimal list-inside text-cyber-text space-y-2 mt-2 font-sans">
               {analysisResult.feedback.map((item, index) => (
-                <li key={index}>{item}</li>
+                <li key={index} className="border-b border-cyber-dim/20 pb-1">{item}</li>
               ))}
             </ol>
           </div>
 
           {isPassed && (
-            <div className="pt-4 text-center border-t border-gray-medium/50">
-              <p className="text-green-400 font-bold text-lg">Congratulations! You passed this challenge!</p>
+            <div className="pt-4 text-center border-t border-cyber-primary/30">
+              <p className="text-4xl font-display font-bold text-cyber-accent drop-shadow-[0_0_10px_#00ff7f]">
+                CHALLENGE PASSED
+              </p>
+              <p className="text-cyber-text font-bold text-lg mb-4">Mission parameters met. Well done, agent.</p>
+
               {isNextChallengeAvailable ? (
                 <button
                   onClick={onNextChallenge}
-                  className="mt-2 py-2 px-6 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-transform transform hover:scale-105"
+                  className="mt-2 py-2 px-6 bg-cyber-accent text-cyber-bg font-bold rounded-md transition-transform transform hover:scale-105 animate-glow"
                 >
-                  Next Challenge &rarr;
+                  NEXT MISSION &rarr;
                 </button>
               ) : (
-                 <p className="mt-2 text-yellow-300 font-semibold">You've completed all the challenges!</p>
+                 <p className="mt-2 text-yellow-300 font-semibold">ALL MISSIONS COMPLETED. COMMAND AWAITS YOUR REPORT.</p>
               )}
             </div>
           )}

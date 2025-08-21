@@ -1,5 +1,5 @@
-
 import React, { useState } from 'react';
+import Spinner from './Spinner';
 
 interface AuthFormProps {
   onSubmit: (email: string, password: string) => Promise<void>;
@@ -18,60 +18,62 @@ const AuthForm: React.FC<AuthFormProps> = ({ onSubmit, type }) => {
     setError('');
     try {
       await onSubmit(email, password);
-    } catch (err) {
-      setError('Authentication failed');
+    } catch (err: any) {
+      setError(err.message || 'Authentication failed. Please check your credentials.');
+    } finally {
+        setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-6 bg-gray-dark rounded-lg shadow-lg p-8 w-full max-w-md mx-auto"
+      className="space-y-6 bg-cyber-surface/70 backdrop-blur-md rounded-lg shadow-2xl shadow-cyber-primary/20 p-8 w-full max-w-md mx-auto border-2 border-cyber-primary/30"
     >
-      <h2 className="text-2xl font-bold text-white text-center mb-4">
-        {type === 'login' ? '🔑 Login to Your Account' : '📝 Create a New Account'}
+      <h2 className="text-3xl font-display font-bold text-cyber-primary text-center tracking-widest">
+        {type === 'login' ? 'AGENT LOGIN' : 'CREATE ID'}
       </h2>
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-light mb-1">
-          👤 Email
+        <label htmlFor="email" className="block text-sm font-bold text-cyber-accent mb-2 uppercase tracking-wider">
+          Email Address
         </label>
         <input
           id="email"
           type="email"
-          placeholder="Enter your email"
+          placeholder="agent@email.com"
           value={email}
           onChange={e => setEmail(e.target.value)}
           required
-          className="w-full p-3 bg-gray-medium rounded-lg border-2 border-gray-dark focus:border-brand-primary focus:ring-brand-primary focus:outline-none transition-colors mb-2 text-white"
+          className="w-full p-3 bg-cyber-bg rounded-md border-2 border-cyber-secondary/50 focus:border-cyber-secondary focus:ring-2 focus:ring-cyber-secondary/50 focus:outline-none transition-all text-cyber-text placeholder:text-cyber-dim"
         />
       </div>
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-light mb-1">
-          🔒 Password
+        <label htmlFor="password" className="block text-sm font-bold text-cyber-accent mb-2 uppercase tracking-wider">
+          Password
         </label>
         <input
           id="password"
           type="password"
-          placeholder="Enter your password"
+          placeholder="Enter secure password"
           value={password}
           onChange={e => setPassword(e.target.value)}
           required
-          className="w-full p-3 bg-gray-medium rounded-lg border-2 border-gray-dark focus:border-brand-primary focus:ring-brand-primary focus:outline-none transition-colors mb-2 text-white"
+          className="w-full p-3 bg-cyber-bg rounded-md border-2 border-cyber-secondary/50 focus:border-cyber-secondary focus:ring-2 focus:ring-cyber-secondary/50 focus:outline-none transition-all text-cyber-text placeholder:text-cyber-dim"
         />
       </div>
       <button
         type="submit"
         disabled={loading}
-        className="w-full py-3 px-6 bg-brand-primary hover:bg-brand-secondary text-white font-bold rounded-lg transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed transform hover:scale-105 active:scale-100"
+        className="w-full flex justify-center items-center py-3 px-6 bg-cyber-primary text-cyber-bg font-bold rounded-md transition-all duration-300 disabled:bg-cyber-dim disabled:cursor-not-allowed transform hover:scale-105 active:scale-100 hover:shadow-lg hover:shadow-cyber-primary/50 glitch-button"
+        data-text={loading ? '' : (type === 'login' ? 'ACCESS' : 'REGISTER')}
       >
         {loading
-          ? '⏳ Please wait...'
+          ? <Spinner />
           : type === 'login'
-            ? '🔑 Login'
-            : '📝 Sign Up'}
+            ? 'ACCESS'
+            : 'REGISTER'}
       </button>
-      {error && <div className="text-red-500 text-center mt-2">{error}</div>}
+      {error && <div className="text-yellow-400 bg-red-500/30 p-3 rounded-md text-center mt-2 border border-red-500">{error}</div>}
     </form>
   );
 };

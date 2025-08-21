@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
 import { AnalysisResult, Challenge } from '../types';
 
@@ -83,19 +84,20 @@ export const generateImage = async (prompt: string, service: ImageService = 'pol
   }
 };
 
-export const analyzeImages = async (challenge: Challenge, generatedImageBase64: string): Promise<AnalysisResult> => {
+export const analyzeImages = async (challenge: Challenge, generatedImageBase64: string, userPrompt: string): Promise<AnalysisResult> => {
   const model = 'gemini-2.5-flash';
   
   const analysisPrompt = `
     You are an expert image analysis AI for a prompt engineering learning tool.
     A student is trying to match a target image for a challenge called "${challenge.name}".
     The goal is: "${challenge.description}".
+    The student's prompt was: "${userPrompt}".
     
-    Your task is to compare the student's generated image with the target image and provide structured feedback.
+    Your task is to compare the student's generated image with the target image, evaluate the student's prompt, and provide structured feedback.
     
-    Based on the visual differences, provide:
-    1.  A 'similarityScore' from 0-100.
-    2.  A 'feedback' JSON array of strings. This array should contain up to 3 of the most obvious prompt changes required to better match the target. Each string in the array is one piece of feedback. Let the tone of this feedback be quirky and let it be vague yet in a simple and clear Indian English. Keep the technical terms in pure English.
+    Based on this, provide:
+    1.  A 'similarityScore' from 0-100 for the generated image compared to the target image.
+    2.  A 'feedback' JSON array of strings. This array should contain up to 3 of the most obvious prompt changes required to better match the target. Let the tone of this feedback be quirky and vague, in simple and clear Indian English. Keep technical terms in pure English.
     
     Respond ONLY with a JSON object matching the schema.
   `;
